@@ -1,0 +1,131 @@
+from __future__ import annotations
+import random
+import numpy as np
+import torch
+from IPython.display import HTML, display_html # type: ignore
+
+
+def fill_grid(grid: torch.Tensor) -> bool:
+    """Backtracking Sudoku solver (randomized)."""
+    for row in range(4):
+        for col in range(4):
+            if grid[row, col] == 0:  # empty cell
+                nums = list(range(1, 5))
+                random.shuffle(nums)  # random order
+                
+                for num in nums:
+                    if is_valid(grid, row, col, num):
+                        grid[row, col] = num
+                        if fill_grid(grid):  # recursive
+                            return True
+                        grid[row, col] = 0  # backtrack
+                return False
+    return True  # full grid
+
+def generate_sudoku_solution() -> torch.Tensor:
+    """Generate a random complete Sudoku solution."""
+    grid = torch.zeros((4, 4), dtype=torch.int)
+    fill_grid(grid)
+    return grid
+
+def find_empty(grid: torch.Tensor):
+    """Return the next empty cell or None."""
+    for r in range(4):
+        for c in range(4):
+            if grid[r, c] == 0:
+                return r, c
+    return None
+
+def is_valid(grid:torch.Tensor, r:int, c:int, val:int) -> bool:
+    """Check if val can go at (r, c)."""
+    if val in grid[r, :]: return False
+    if val in grid[:, c]: return False
+    br, bc = 2 * (r // 2), 2 * (c // 2)
+    if val in grid[br:br+2, bc:bc+2]: return False
+    return True
+
+def count_solutions(grid: torch.Tensor, limit:int = 2) -> int:
+    """
+    Backtracking solver that counts solutions up to 'limit'.
+    Returns number of solutions found.
+    """
+    empty = find_empty(grid)
+    if not empty:
+        return 1  # solved
+
+    r, c = empty
+    count = 0
+    for val in range(1, 5):
+        if is_valid(grid, r, c, val):
+            grid[r, c] = val
+            count += count_solutions(grid, limit)
+            grid[r, c] = 0
+            if count >= limit:
+                break
+    return count
+
+def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
+    """
+    Given a full valid Sudoku solution (9x9 torch.Tensor),
+    iteratively remove entries until puzzle is minimal with unique solution.
+    """
+    puzzle = solution.clone()
+    cells = [(r, c) for r in range(4) for c in range(4)]
+    random.shuffle(cells)
+
+    for r, c in cells:
+        backup = puzzle[r, c].item()
+        puzzle[r, c] = 0
+        # check uniqueness
+        if count_solutions(puzzle.clone(), limit=2) != 1:
+            puzzle[r, c] = backup  # restore if not unique
+
+    return puzzle
+
+def display_sudoku(puzzle: torch.Tensor) -> None:
+    """
+    Display a Sudoku puzzle as a styled HTML table in Jupyter.
+    
+    Parameters
+    ----------
+    puzzle : torch.Tensor (9x9)
+        Sudoku puzzle with numbers (0 for empty).
+    """
+    html = "<table style='border-collapse: collapse; font-size:25px; text-align:center;'>"
+
+    size = puzzle.size(dim=1)
+    sqrt_size = int(np.sqrt(size))  
+
+
+    for i in range(size):
+        html += "<tr>"
+        for j in range(size):
+            val = puzzle[i, j].item()
+            num = str(val) if val != 0 else "&nbsp;"  # blank for 0
+
+            # Borders: thick every 3rd row/col
+            style = (
+                "width:40px; height:40px; "
+                "border: 1px solid black; "
+                "text-align: center; vertical-align: middle;"
+            )
+            if i % sqrt_size == 0:
+                style += " border-top: 3px solid black;"
+            if j % sqrt_size == 0:
+                style += " border-left: 3px solid black;"
+            if i == 8:
+                style += " border-bottom: 3px solid black;"
+            if j == 8:
+                style += " border-right: 3px solid black;"
+
+            # Colors
+            if val == 0:
+                style += " color: gray;"
+            else:
+                style += " font-weight: bold; color: white;"
+
+            html += f"<td style='{style}'>{num}</td>"
+        html += "</tr>"
+    html += "</table>"
+    
+    display_html(HTML(html))
