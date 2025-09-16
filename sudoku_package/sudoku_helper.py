@@ -3,6 +3,7 @@ import random
 import numpy as np
 import torch
 from IPython.display import HTML, display_html # type: ignore
+import csv
 
 
 def fill_grid(grid: torch.Tensor) -> bool:
@@ -81,6 +82,27 @@ def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
             puzzle[r, c] = backup  # restore if not unique
 
     return puzzle
+
+def tensor_to_csv(tensor: torch.Tensor, filename: str):
+    """
+    Save a 2D PyTorch tensor to a CSV file.
+
+    Args:
+        tensor: 2D torch.Tensor
+        filename: str, path to save CSV
+    """
+    if tensor.ndim != 2:
+        raise ValueError("Tensor must be 2D")
+
+    # Convert to numpy
+    array = tensor.cpu().numpy()
+
+    # Write to CSV
+    with open(filename, "w", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerows(array)
+
+    print(f"Saved tensor to {filename}")
 
 def display_sudoku(puzzle: torch.Tensor) -> None:
     """
