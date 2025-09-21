@@ -67,8 +67,11 @@ def count_solutions(grid: torch.Tensor, limit:int = 2) -> int:
 
 def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
     """
-    Given a full valid Sudoku solution (9x9 torch.Tensor),
+    Given a full valid Sudoku solution (4x4 torch.Tensor),
     iteratively remove entries until puzzle is minimal with unique solution.
+
+    TODO: Make this modular for 4x4 and 9x9 and ideally make it
+    so that this works for either a flat or 2D sudoku tensor
     """
     puzzle = solution.clone()
     cells = [(r, c) for r in range(4) for c in range(4)]
@@ -83,26 +86,37 @@ def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
 
     return puzzle
 
-def tensor_to_csv(tensor: torch.Tensor, filename: str):
+# def tensor_to_csv(tensor: torch.Tensor, filename: str):
+#     """
+#     Save a 2D PyTorch tensor to a CSV file.
+
+#     Args:
+#         tensor: 2D torch.Tensor
+#         filename: str, path to save CSV
+#     """
+#     if tensor.ndim != 2:
+#         raise ValueError("Tensor must be 2D")
+
+#     # Convert to numpy
+#     array = tensor.cpu().numpy()
+
+#     # Write to CSV
+#     with open(filename, "w", newline="") as f:
+#         writer = csv.writer(f)
+#         writer.writerows(array)
+
+#     print(f"Saved tensor to {filename}")
+
+def append_sudoku_to_csv(tensor: torch.Tensor, filename: str, mode: str = "a"):
     """
-    Save a 2D PyTorch tensor to a CSV file.
-
-    Args:
-        tensor: 2D torch.Tensor
-        filename: str, path to save CSV
+    Append a 2D sudoku tensor as a flattened row into a single CSV file.
     """
-    if tensor.ndim != 2:
-        raise ValueError("Tensor must be 2D")
-
-    # Convert to numpy
-    array = tensor.cpu().numpy()
-
-    # Write to CSV
-    with open(filename, "w", newline="") as f:
+    
+    row = tensor.flatten().cpu().numpy()
+    
+    with open(filename, mode, newline="") as f:
         writer = csv.writer(f)
-        writer.writerows(array)
-
-    print(f"Saved tensor to {filename}")
+        writer.writerow(row)
 
 def display_sudoku(puzzle: torch.Tensor) -> None:
     """
