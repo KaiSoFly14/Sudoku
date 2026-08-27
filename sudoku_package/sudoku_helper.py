@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from IPython.display import HTML, display_html # type: ignore
 import csv
+from torch_geometric.utils import to_undirected
 
 
 def fill_grid(grid: torch.Tensor) -> bool:
@@ -23,9 +24,9 @@ def fill_grid(grid: torch.Tensor) -> bool:
                 return False
     return True  # full grid
 
-def generate_sudoku_solution() -> torch.Tensor:
+def generate_sudoku_solution(size: int = 4) -> torch.Tensor:
     """Generate a random complete Sudoku solution."""
-    grid = torch.zeros((4, 4), dtype=torch.int)
+    grid = torch.zeros((size, size), dtype=torch.int)
     fill_grid(grid)
     return grid
 
@@ -64,6 +65,44 @@ def count_solutions(grid: torch.Tensor, limit:int = 2) -> int:
             if count >= limit:
                 break
     return count
+
+def build_sudoku_edges(size=4):
+    """
+    Build adjacency list for a Sudoku graph of given size (e.g., 4x4, 9x9, etc.)
+    """
+
+    edge_index = []
+
+    # Number of cells in each minibox
+    box_size = int(size ** 0.5)
+
+    if box_size ** 2 != size:
+        raise ValueError("size must have an integer square root (e.g. 4, 9, 16)")
+
+    for i in range(size):
+        for j in range(size):
+
+            # Current cell, loops through all cells in grid
+            node = i * size + j
+
+            # Loop through every other cell and check if connection should be made
+            for k in range(node + 1, size * size):
+
+                row = k // size
+                col = k % size
+
+                same_row = row == i
+                same_column = col == j
+
+                same_box = (
+                    i // box_size == row // box_size
+                    and j // box_size == col // box_size
+                )
+
+                if same_row or same_column or same_box:
+                    edge_index.append([node, k])
+
+    return to_undirected(torch.tensor(edge_index, dtype=torch.long).t().contiguous()) 
 
 def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
     """
