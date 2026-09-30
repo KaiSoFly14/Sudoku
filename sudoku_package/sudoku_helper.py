@@ -1,206 +1,71 @@
 from __future__ import annotations
-import random
+
+import csv
 import numpy as np
 import torch
-from IPython.display import HTML, display_html # type: ignore
-import csv
-from torch_geometric.utils import to_undirected
+from IPython.display import HTML, display_html  # type: ignore
+
+from .sudoku import Sudoku
 
 
-def fill_grid(grid: torch.Tensor) -> bool:
-    """Backtracking Sudoku solver (randomized)."""
-    for row in range(4):
-        for col in range(4):
-            if grid[row, col] == 0:  # empty cell
-                nums = list(range(1, 5))
-                random.shuffle(nums)  # random order
-                
-                for num in nums:
-                    if is_valid(grid, row, col, num):
-                        grid[row, col] = num
-                        if fill_grid(grid):  # recursive
-                            return True
-                        grid[row, col] = 0  # backtrack
-                return False
-    return True  # full grid
+def as_grid(board: Sudoku | torch.Tensor) -> torch.Tensor:
+    """Convert either a Sudoku object or tensor to a 2D tensor."""
+    if isinstance(board, Sudoku):
+        return board.grid
 
-def generate_sudoku_solution(size: int = 4) -> torch.Tensor:
-    """Generate a random complete Sudoku solution."""
-    grid = torch.zeros((size, size), dtype=torch.int)
-    fill_grid(grid)
-    return grid
+    if board.ndim != 2:
+        raise ValueError("Board must be a 2D tensor")
 
-def find_empty(grid: torch.Tensor):
-    """Return the next empty cell or None."""
-    for r in range(4):
-        for c in range(4):
-            if grid[r, c] == 0:
-                return r, c
-    return None
+    return board
 
-def is_valid(grid:torch.Tensor, r:int, c:int, val:int) -> bool:
-    """Check if val can go at (r, c)."""
-    if val in grid[r, :]: return False
-    if val in grid[:, c]: return False
-    br, bc = 2 * (r // 2), 2 * (c // 2)
-    if val in grid[br:br+2, bc:bc+2]: return False
-    return True
 
-def count_solutions(grid: torch.Tensor, limit:int = 2) -> int:
-    """
-    Backtracking solver that counts solutions up to 'limit'.
-    Returns number of solutions found.
-    """
-    empty = find_empty(grid)
-    if not empty:
-        return 1  # solved
+def display_sudoku(board: Sudoku | torch.Tensor) -> None:
+    """Display a Sudoku board as a styled Jupyter HTML table."""
+    grid = as_grid(board)
+    size = grid.shape[0]
+    box_size = int(np.sqrt(size))
 
-    r, c = empty
-    count = 0
-    for val in range(1, 5):
-        if is_valid(grid, r, c, val):
-            grid[r, c] = val
-            count += count_solutions(grid, limit)
-            grid[r, c] = 0
-            if count >= limit:
-                break
-    return count
-
-def build_sudoku_edges(size=4):
-    """
-    Build adjacency list for a Sudoku graph of given size (e.g., 4x4, 9x9, etc.)
-    """
-
-    edge_index = []
-
-    # Number of cells in each minibox
-    box_size = int(size ** 0.5)
-
-    if box_size ** 2 != size:
-        raise ValueError("size must have an integer square root (e.g. 4, 9, 16)")
-
-    for i in range(size):
-        for j in range(size):
-
-            # Current cell, loops through all cells in grid
-            node = i * size + j
-
-            # Loop through every other cell and check if connection should be made
-            for k in range(node + 1, size * size):
-
-                row = k // size
-                col = k % size
-
-                same_row = row == i
-                same_column = col == j
-
-                same_box = (
-                    i // box_size == row // box_size
-                    and j // box_size == col // box_size
-                )
-
-                if same_row or same_column or same_box:
-                    edge_index.append([node, k])
-
-    return to_undirected(torch.tensor(edge_index, dtype=torch.long).t().contiguous()) 
-
-def generate_minimal_puzzle(solution: torch.Tensor) -> torch.Tensor:
-    """
-    Given a full valid Sudoku solution (4x4 torch.Tensor),
-    iteratively remove entries until puzzle is minimal with unique solution.
-
-    TODO: Make this modular for 4x4 and 9x9 and ideally make it
-    so that this works for either a flat or 2D sudoku tensor
-    """
-    puzzle = solution.clone()
-    cells = [(r, c) for r in range(4) for c in range(4)]
-    random.shuffle(cells)
-
-    for r, c in cells:
-        backup = puzzle[r, c].item()
-        puzzle[r, c] = 0
-        # check uniqueness
-        if count_solutions(puzzle.clone(), limit=2) != 1:
-            puzzle[r, c] = backup  # restore if not unique
-
-    return puzzle
-
-# def tensor_to_csv(tensor: torch.Tensor, filename: str):
-#     """
-#     Save a 2D PyTorch tensor to a CSV file.
-
-#     Args:
-#         tensor: 2D torch.Tensor
-#         filename: str, path to save CSV
-#     """
-#     if tensor.ndim != 2:
-#         raise ValueError("Tensor must be 2D")
-
-#     # Convert to numpy
-#     array = tensor.cpu().numpy()
-
-#     # Write to CSV
-#     with open(filename, "w", newline="") as f:
-#         writer = csv.writer(f)
-#         writer.writerows(array)
-
-#     print(f"Saved tensor to {filename}")
-
-def append_sudoku_to_csv(tensor: torch.Tensor, filename: str, mode: str = "a"):
-    """
-    Append a 2D sudoku tensor as a flattened row into a single CSV file.
-    """
-    
-    row = tensor.flatten().cpu().numpy()
-    
-    with open(filename, mode, newline="") as f:
-        writer = csv.writer(f)
-        writer.writerow(row)
-
-def display_sudoku(puzzle: torch.Tensor) -> None:
-    """
-    Display a Sudoku puzzle as a styled HTML table in Jupyter.
-    
-    Parameters
-    ----------
-    puzzle : torch.Tensor (9x9)
-        Sudoku puzzle with numbers (0 for empty).
-    """
     html = "<table style='border-collapse: collapse; font-size:25px; text-align:center;'>"
 
-    size = puzzle.size(dim=1)
-    sqrt_size = int(np.sqrt(size))  
-
-
-    for i in range(size):
+    for row in range(size):
         html += "<tr>"
-        for j in range(size):
-            val = puzzle[i, j].item()
-            num = str(val) if val != 0 else "&nbsp;"  # blank for 0
 
-            # Borders: thick every 3rd row/col
+        for col in range(size):
+            value = grid[row, col].item()
+            text = str(value) if value != 0 else "&nbsp;"
+
             style = (
                 "width:40px; height:40px; "
-                "border: 1px solid black; "
-                "text-align: center; vertical-align: middle;"
+                "border:1px solid black; "
+                "text-align:center; vertical-align:middle;"
             )
-            if i % sqrt_size == 0:
-                style += " border-top: 3px solid black;"
-            if j % sqrt_size == 0:
-                style += " border-left: 3px solid black;"
-            if i == 8:
-                style += " border-bottom: 3px solid black;"
-            if j == 8:
-                style += " border-right: 3px solid black;"
 
-            # Colors
-            if val == 0:
-                style += " color: gray;"
-            else:
-                style += " font-weight: bold; color: white;"
+            if row % box_size == 0:
+                style += "border-top:3px solid black;"
+            if col % box_size == 0:
+                style += "border-left:3px solid black;"
+            if row == size - 1:
+                style += "border-bottom:3px solid black;"
+            if col == size - 1:
+                style += "border-right:3px solid black;"
 
-            html += f"<td style='{style}'>{num}</td>"
+            style += "color:gray;" if value == 0 else "font-weight:bold;"
+
+            html += f"<td style='{style}'>{text}</td>"
+
         html += "</tr>"
+
     html += "</table>"
-    
     display_html(HTML(html))
+
+
+def append_sudoku_to_csv(
+    board: Sudoku | torch.Tensor,
+    filename: str,
+    mode: str = "a",
+) -> None:
+    """Append a flattened Sudoku board to a CSV file."""
+    grid = as_grid(board)
+
+    with open(filename, mode, newline="") as file:
+        csv.writer(file).writerow(grid.flatten().tolist())
